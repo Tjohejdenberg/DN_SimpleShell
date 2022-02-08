@@ -12,71 +12,128 @@ using System.ComponentModel;
 
 class SimpleShell
 {
-    public static int Main()
+    public static void Main()
     {
         while (true)
         {
-            // Read 21H2
+            // Read 
             Console.Write("[SimpleShell]>>> ");
 
             int result = evaluateCmdLineAndStartProcess();
         }
-        return 1;
     }
 
     private static int setupConsoleAndCtrlCPress() {
         Console.Clear();
 
         // Setup so that Ctrl+C quits the application
+        // TODO Pressing ctrl C must stop all running child processes! and reap zombie children
         Console.CancelKeyPress += new ConsoleCancelEventHandler(exitAtCtrlCHandler);
         return 1;
     }
 
-    protected static void exitAtCtrlCHandler(object sender, ConsoleCancelEventArgs args)
+    protected static void exitAtCtrlCHandler(object? sender, ConsoleCancelEventArgs args)
     {
         Console.WriteLine("\n");
     }
 
     private static int evaluateCmdLineAndStartProcess() 
     {
-        string[] args = Console.ReadLine().Split(' ');
+        /*
+        Things to handle:
 
-        if (args.Last() == "&") 
-        {
-            Console.WriteLine("Background process");
-        } 
+        1) Press enter -> Nothing happens [OK]
+        2) spaces must not be interpreted as arguments [OK]
+        3) Support a persistent cahce of standard programs
+        4) Possible to toggle if process should go in background or not
+        5) Wrappa felet om användaren skriver ett program som inte finns
+        */
+        
 
-        StartProcessWithArgs(args[0]);
 
-        foreach (string arg in args) {
-            Console.WriteLine(arg);
+        string allArgs = Console.ReadLine() ?? "";
+        string[] trimmedArgs = allArgs
+                                .Split(' ')
+                                .Select(args => args.Trim())
+                                .Where(args => !string.IsNullOrWhiteSpace(args))
+                                .ToArray();
+        
+        int result = 1;
+        if (trimmedArgs != null && trimmedArgs.Length > 0) { 
+            result = StartProcessWithArgs(trimmedArgs[0]); 
         }
-
-        // Start a process assuming that args[0] is a filepath and the other things parameters for that process
-
-        return 1;
+        
+        return result;
     }
 
-    private static void StartProcessWithArgs(string filePath) {
+    private static int StartProcessWithArgs(string filePath) {
         try
             {
                 using (Process myProcess = new Process())
                 {
-                    myProcess.StartInfo.UseShellExecute = false;
-                    myProcess.StartInfo.RedirectStandardOutput = true; // Verkar som att man också måste fixa någon streamreader som läser från 
-                    // processens standard output.
-                    myProcess.StartInfo.FileName = filePath;
-                    myProcess.StartInfo.CreateNoWindow = true;
-                    myProcess.Start();
-                    // This code assumes the process you are starting will terminate itself.
-                    // Given that it is started without a window so you cannot terminate it
-                    // on the desktop, it must terminate itself or you can do it programmatically
-                    // from this application using the Kill method.
+
+                    // TODO: Make sure IDisposable stuff is implemented.
+                    /*
+                    Det är lite småkomplicerat det här. Kör jag WaitForExit() så får jag bra beteende för kommandoprogram som behöver interageras med:
+
+                    [SimpleShell]>>> ".\SayHello.exe"
+                    ".\SayHello.exe"
+                    SHello!
+
+                    [SimpleShell]>>>
+
+                    men om jag tar bort det för att låta en process köra i bakgrunden så får jag 
+
+                    [SimpleShell]>>> ".\SayHello.exe"
+                    ".\SayHello.exe"
+                    [SimpleShell]>>> SHello!
+
+                    dvs outputen hamnar fel. Då måste jag nog köra att jag slangar om den med någon slags handler i bakgrunden.
+                    
+
+                    */
+
+                    if (true) {
+                        // Synchronous program
+                        // TODO: actually pass arguments...
+                        myProcess.StartInfo.UseShellExecute = false;
+                        myProcess.StartInfo.FileName = filePath;
+                        myProcess.Start();
+                        myProcess.WaitForExit();
+                    } else {
+                        // Asynchronous program
+                        // Måste man ha outputen om man kör i bakgrunden?
+                            // * KAnske låter den kastas bort om inte användaren specar vilken fil den ska skrivas ner till exv.
+                        /* //myProcess.Arguments = args; // Take args as parameter 
+                        myProcess.StartInfo.UseShellExecute = false;
+                        //myProcess.StartInfo.RedirectStandardOutput = true; 
+                        //myProcess.StartInfo.RedirectStandardInput = true;
+                        myProcess.StartInfo.FileName = filePath;
+                        //myProcess.StartInfo.CreateNoWindow = true;
+                        
+                        // Set our event handler to asynchronously read the sort output.
+                        //myProcess.OutputDataReceived += MyOutputHandler;
+                        
+                        myProcess.Start();
+
+                        //myProcess.BeginOutputReadLine();
+                        
+                        //myProcess.WaitForExit(); */
+                    }
+
+                    
                 }
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
             }
+        return 0;
     }
+
+    /* private static void MyOutputHandler(object sendingProcess,
+            DataReceivedEventArgs outLine)
+        {
+            Console.WriteLine(outLine.Data);
+        } */
 }
