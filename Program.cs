@@ -1,5 +1,4 @@
 ﻿using System.Diagnostics;
-using System.ComponentModel;
 
 class SimpleShell
 {
@@ -28,7 +27,10 @@ class SimpleShell
 
     protected static void exitAtCtrlCHandler(object? sender, ConsoleCancelEventArgs args)
     {
-        // it automatically sets the continue property of the process to false
+        // it automatically sets the continue property of the process to false and will terminate this process
+        // TODO: Call Dispose here? 
+        // TODO: Kill child processes in the dispose method or here?
+
         Console.WriteLine("\n");
     }
 
@@ -72,7 +74,6 @@ class SimpleShell
 
                     // TODO: Make sure IDisposable stuff is implemented.
                     // TODO: Reap children. No action can leave abandoned processes.
-                    // TODO: actually pass arguments...
 
                     myProcess.StartInfo.UseShellExecute = false;
                     myProcess.StartInfo.FileName = filePath;
@@ -80,13 +81,9 @@ class SimpleShell
                     myProcess.Start();
 
                     if (!backgroundProc) {
-                        // Synchronous program, switch based on args[]  
                         myProcess.WaitForExit();
                     } 
                 }
-            }
-            catch (Win32Exception) {
-                Console.WriteLine("Cannot find a program with the given name.");
             }
             catch (Exception e)
             {
