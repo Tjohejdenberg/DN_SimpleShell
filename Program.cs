@@ -1,94 +1,81 @@
 ﻿using System.Diagnostics;
 
-class SimpleShell
+class Shell
 {
     public static void Main()
     {
+        Job processGroup = new Job();
+        processGroup.AddProcess(Process.GetCurrentProcess().Handle);
 
-        int setup = setupConsoleAndCtrlCPress();
+        int setup = setupConsoleAndCtrlCPress(processGroup);
 
         while (true)
         {
-            // Read 
             Console.Write("[SimpleShell]>>> ");
-
-            int result = evaluateCmdLineAndStartProcess();
+            int result = evaluateCmdLineAndStartProcess(processGroup);
         }
     }
 
-    private static int setupConsoleAndCtrlCPress() {
-        Console.Clear();
-
-        // Setup so that Ctrl+C quits the application
-        // TODO Pressing ctrl C must stop all running child processes! and reap zombie children
-        Console.CancelKeyPress += new ConsoleCancelEventHandler(exitAtCtrlCHandler);
-        return 1;
+    private static int setupConsoleAndCtrlCPress(Job processGroup)
+    {
+        // Use lambda as adapter to get job parameter in
+        Console.CancelKeyPress += new ConsoleCancelEventHandler((sender, args) => exitAtCtrlCHandler(sender, args, processGroup));
+        return 0;
     }
 
-    protected static void exitAtCtrlCHandler(object? sender, ConsoleCancelEventArgs args)
+    protected static void exitAtCtrlCHandler(object? sender, ConsoleCancelEventArgs args, Job processGroup) 
     {
         // it automatically sets the continue property of the process to false and will terminate this process
-        // TODO: Call Dispose here? 
-        // TODO: Kill child processes in the dispose method or here?
-
+        ChildProcesses.DisposeChildProcOfPID((UInt32)Process.GetCurrentProcess().Id);
+        processGroup.Dispose();
+        // Investigate - it is possible to explicitly terminate all processes in the job, see Windows internals. Would not have to set the kill-limit.
+        
         Console.WriteLine("\n");
     }
 
-    private static int evaluateCmdLineAndStartProcess() 
+    private static int evaluateCmdLineAndStartProcess(Job processGroup)
     {
-        /*
-        Things to handle:
-
-        1) Press enter -> Nothing happens [OK]
-        2) spaces must not be interpreted as arguments [OK]
-        3) Support a persistent cahce of standard programs
-        4) Possible to toggle if process should go in background or not [OK]
-        5) Wrappa felet om användaren skriver ett program som inte finns [OK]
-        */
-
         string rawArgString = Console.ReadLine() ?? "";
         string[] separateArgs = rawArgString
                                 .Split(' ')
                                 .Select(args => args.Trim())
                                 .Where(args => !string.IsNullOrWhiteSpace(args))
                                 .ToArray();
-        
+
         int result = 1;
-        if (separateArgs != null && separateArgs.Length > 0) { 
-            
+        if (separateArgs != null && separateArgs.Length > 0)
+        {
+
             string filepath = separateArgs[0];
-            string arguments = string.Join(' ',separateArgs[1..]);
+            string arguments = string.Join(' ', separateArgs[1..]);
             bool isBackGroundProcess = separateArgs.Last() == "&";
 
-            result = StartProcessWithArgs(filepath, arguments, isBackGroundProcess); 
+            result = StartProcess(processGroup, filepath, arguments, isBackGroundProcess);
         }
-        
+
         return result;
     }
 
-    private static int StartProcessWithArgs(string filePath, string args, bool backgroundProc = false) {
+    private static int StartProcess(Job processGroup, string filePath, string args, bool backgroundProc = false)
+    {
         try
+        {
+            using (Process newProcess = ChildProcesses.StartProcessWithArgs(filePath, args))
             {
-                using (Process myProcess = new Process())
+                processGroup.AddProcess(newProcess.Handle);
+
+                if (!backgroundProc)
                 {
-
-                    // TODO: Make sure IDisposable stuff is implemented.
-                    // TODO: Reap children. No action can leave abandoned processes.
-
-                    myProcess.StartInfo.UseShellExecute = false;
-                    myProcess.StartInfo.FileName = filePath;
-                    myProcess.StartInfo.Arguments = args;
-                    myProcess.Start();
-
-                    if (!backgroundProc) {
-                        myProcess.WaitForExit();
-                    } 
+                    newProcess.WaitForExit();
                 }
             }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.Message);
-            }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e.Message);
+        }
         return 0;
     }
 }
+
+
